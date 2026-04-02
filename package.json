@@ -1,0 +1,31 @@
+{
+  "name": "backend1",
+  "version": "1.0.0",
+  "description": "Finance dashboard backend with RBAC and analytics",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "dev:platform": "npm run dev --prefix finance-dashboard-platform",
+    "start:platform": "npm start --prefix finance-dashboard-platform",
+    "install:platform": "npm install --prefix finance-dashboard-platform",
+    "install:all": "npm install && npm install --prefix finance-dashboard-platform",
+    "migrate:platform": "npm run migrate --prefix finance-dashboard-platform",
+    "seed:platform": "npm run seed --prefix finance-dashboard-platform"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
