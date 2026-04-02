@@ -1,8 +1,20 @@
 # Dependencies (root and subprojects)
 node_modules/
 
-# Secrets — never commit (applies in any folder)
+# Secrets — never commit (applies in any folder at any depth)
 .env
+**/.env
+**/.env.*
+!**/.env.example
+!env.platform.example
+
+# Other common secret files
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/secrets.json
+**/credentials.json
 
 # Platform SQLite database file
 finance-dashboard-platform/data/*.db
