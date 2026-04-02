@@ -1,37 +1,19 @@
-const knex = require("knex");
-const path = require("path");
-const fs = require("fs");
+const mongoose = require("mongoose");
 
-const config = require("../../knexfile");
-
-const env = process.env.NODE_ENV || "development";
-const knexConfig = config[env] || config.development;
-
-if (knexConfig.client === "sqlite3") {
-  const file =
-    typeof knexConfig.connection === "object" && knexConfig.connection.filename
-      ? knexConfig.connection.filename
-      : path.join(__dirname, "..", "..", "data", "finance.db");
-  const dir = path.dirname(file);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-const db = knex(knexConfig);
-
-let migrated = false;
-
-async function runMigrationsIfNeeded() {
-  if (migrated) return;
-  if (process.env.SKIP_DB_MIGRATE === "true") {
-    migrated = true;
-    return;
+async function connectMongo() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("MONGODB_URI is not set. Add it to finance-dashboard-platform/.env");
   }
-  await db.migrate.latest();
-  migrated = true;
+
+  mongoose.set("strictQuery", true);
+  await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 10_000,
+  });
 }
 
-function isPostgres() {
-  return db.client.config.client === "pg";
+function isConnected() {
+  return mongoose.connection.readyState === 1;
 }
 
-module.exports = { db, runMigrationsIfNeeded, isPostgres };
+module.exports = { connectMongo, mongoose, isConnected };

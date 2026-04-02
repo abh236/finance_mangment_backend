@@ -1,55 +1,50 @@
-const { db } = require("../config/database");
-const { insertedId } = require("../utils/insertId");
-
-async function insertReturningId(table, data) {
-  if (db.client.config.client === "pg") {
-    const row = await db(table).insert(data).returning("id");
-    return insertedId(row);
-  }
-  const result = await db(table).insert(data);
-  return insertedId(result);
-}
+const mongoose = require("mongoose");
+const { User, toPublicUser } = require("./User");
 
 const UserModel = {
-  findByEmail: (email) => db("users").where({ email }).first(),
+  findByEmail: (email) => User.findOne({ email: email.toLowerCase() }).select("+password"),
 
-  findById: (id) =>
-    db("users").select("id", "name", "email", "role", "status", "created_at").where({ id }).first(),
+  async findById(id) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    const doc = await User.findById(id).lean();
+    return doc ? toPublicUser(doc) : null;
+  },
 
   async create({ name, email, password, role = "viewer" }) {
-    const id = await insertReturningId("users", {
+    const doc = await User.create({
       name,
-      email,
+      email: email.toLowerCase(),
       password,
       role,
       status: "active",
-      created_at: db.fn.now(),
-      updated_at: db.fn.now(),
     });
-    return this.findById(id);
+    return this.findById(doc._id);
   },
 
   async update(id, fields) {
+    if (!mongoose.isValidObjectId(id)) return null;
     const allowed = ["name", "role", "status"];
     const data = {};
     allowed.forEach((k) => {
       if (fields[k] !== undefined) data[k] = fields[k];
     });
     if (!Object.keys(data).length) return null;
-    data.updated_at = db.fn.now();
-    await db("users").where({ id }).update(data);
+    await User.findByIdAndUpdate(id, { $set: data });
     return this.findById(id);
   },
 
   async list({ page = 1, limit = 20 } = {}) {
-    const offset = (page - 1) * limit;
-    const rows = await db("users")
-      .select("id", "name", "email", "role", "status", "created_at")
-      .orderBy("created_at", "desc")
-      .limit(limit)
-      .offset(offset);
-    const [{ total }] = await db("users").count({ total: "*" });
-    return { rows, total: Number(total), page, limit };
+    const skip = (page - 1) * limit;
+    const [rows, total] = await Promise.all([
+      User.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.countDocuments(),
+    ]);
+    return {
+      rows: rows.map((r) => toPublicUser(r)),
+      total,
+      page,
+      limit,
+    };
   },
 };
 

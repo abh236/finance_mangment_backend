@@ -1,3 +1,13 @@
-node_modules
+# Dependencies (root and subprojects)
+node_modules/
+
+# Secrets — never commit (applies in any folder)
 .env
+
+# Platform SQLite database file
+finance-dashboard-platform/data/*.db
+
+# Logs / build
 npm-debug.log*
+*.log
+dist/

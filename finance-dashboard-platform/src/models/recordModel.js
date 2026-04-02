@@ -1,108 +1,99 @@
-const { db } = require("../config/database");
-const { insertedId } = require("../utils/insertId");
+const mongoose = require("mongoose");
+const { FinancialRecord } = require("./FinancialRecord");
 
-async function insertRecord(data) {
-  if (db.client.config.client === "pg") {
-    const row = await db("financial_records").insert(data).returning("id");
-    return insertedId(row);
+function formatRecord(doc) {
+  if (!doc) return null;
+  const r = doc.toObject ? doc.toObject() : { ...doc };
+  const createdBy = r.createdBy;
+  let created_by_name;
+  let created_by;
+  if (createdBy && typeof createdBy === "object" && createdBy.name) {
+    created_by_name = createdBy.name;
+    created_by = String(createdBy._id || createdBy);
+  } else {
+    created_by = String(createdBy);
   }
-  const result = await db("financial_records").insert(data);
-  return insertedId(result);
+  return {
+    id: String(r._id),
+    amount: r.amount,
+    type: r.type,
+    category: r.category,
+    date: r.date instanceof Date ? r.date.toISOString() : r.date,
+    notes: r.notes || "",
+    created_by,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+    ...(created_by_name && { created_by_name }),
+  };
 }
-
-const base = () =>
-  db("financial_records as r")
-    .join("users as u", "r.created_by", "u.id")
-    .whereNull("r.deleted_at")
-    .select(
-      "r.id",
-      "r.amount",
-      "r.type",
-      "r.category",
-      "r.date",
-      "r.notes",
-      "r.created_by",
-      "r.created_at",
-      "r.updated_at",
-      "u.name as created_by_name"
-    );
 
 const RecordModel = {
   async create({ amount, type, category, date, notes, created_by }) {
-    const id = await insertRecord({
+    const doc = await FinancialRecord.create({
       amount,
       type,
       category,
-      date,
-      notes: notes || null,
-      created_by,
-      created_at: db.fn.now(),
-      updated_at: db.fn.now(),
+      date: new Date(date),
+      notes: notes || "",
+      createdBy: created_by,
     });
-    return this.findById(id);
+    return this.findById(doc._id);
   },
 
-  findById: (id) => base().where("r.id", id).first(),
+  async findById(id) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    const doc = await FinancialRecord.findOne({ _id: id, deletedAt: null }).populate("createdBy", "name");
+    return formatRecord(doc);
+  },
 
   async list({ type, category, startDate, endDate, q, page = 1, limit = 20 } = {}) {
-    const offset = (page - 1) * limit;
-    let query = base();
-
-    if (type) query = query.where("r.type", type);
-    if (category) query = query.where("r.category", category);
-    if (startDate) query = query.where("r.date", ">=", startDate);
-    if (endDate) query = query.where("r.date", "<=", endDate);
+    const filter = { deletedAt: null };
+    if (type) filter.type = type;
+    if (category) filter.category = category;
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = new Date(startDate);
+      if (endDate) filter.date.$lte = new Date(endDate);
+    }
     if (q && String(q).trim()) {
-      const term = `%${String(q).trim()}%`;
-      if (db.client.config.client === "pg") {
-        query = query.where(function () {
-          this.where("r.category", "ilike", term).orWhere("r.notes", "ilike", term);
-        });
-      } else {
-        query = query.where(function () {
-          this.where("r.category", "like", term).orWhere("r.notes", "like", term);
-        });
-      }
+      const rx = new RegExp(String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ category: rx }, { notes: rx }];
     }
 
-    const rows = await query.clone().orderBy("r.date", "desc").limit(limit).offset(offset);
+    const skip = (page - 1) * limit;
+    const [docs, total] = await Promise.all([
+      FinancialRecord.find(filter)
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("createdBy", "name"),
+      FinancialRecord.countDocuments(filter),
+    ]);
 
-    let cq = db("financial_records").whereNull("deleted_at");
-    if (type) cq = cq.where("type", type);
-    if (category) cq = cq.where("category", category);
-    if (startDate) cq = cq.where("date", ">=", startDate);
-    if (endDate) cq = cq.where("date", "<=", endDate);
-    if (q && String(q).trim()) {
-      const term = `%${String(q).trim()}%`;
-      if (db.client.config.client === "pg") {
-        cq = cq.where(function () {
-          this.where("category", "ilike", term).orWhere("notes", "ilike", term);
-        });
-      } else {
-        cq = cq.where(function () {
-          this.where("category", "like", term).orWhere("notes", "like", term);
-        });
-      }
-    }
-    const [{ total }] = await cq.count({ total: "*" });
-
-    return { rows, total: Number(total), page, limit };
+    return { rows: docs.map(formatRecord), total, page, limit };
   },
 
   async update(id, fields) {
+    if (!mongoose.isValidObjectId(id)) return null;
     const allowed = ["amount", "type", "category", "date", "notes"];
     const data = {};
     allowed.forEach((k) => {
-      if (fields[k] !== undefined) data[k] = fields[k];
+      if (fields[k] !== undefined) data[k] = k === "date" ? new Date(fields[k]) : fields[k];
     });
     if (!Object.keys(data).length) return null;
-    data.updated_at = db.fn.now();
-    await db("financial_records").where({ id }).whereNull("deleted_at").update(data);
+    await FinancialRecord.findOneAndUpdate({ _id: id, deletedAt: null }, { $set: data });
     return this.findById(id);
   },
 
-  softDelete: (id) =>
-    db("financial_records").where({ id }).whereNull("deleted_at").update({ deleted_at: db.fn.now() }),
+  async softDelete(id) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    const existing = await FinancialRecord.findOne({ _id: id, deletedAt: null }).populate("createdBy", "name");
+    if (!existing) return null;
+    const snapshot = formatRecord(existing);
+    existing.deletedAt = new Date();
+    await existing.save();
+    return snapshot;
+  },
 };
 
 module.exports = RecordModel;

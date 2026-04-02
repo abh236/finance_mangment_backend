@@ -25,7 +25,7 @@ router.get(
 router.get(
   "/:id",
   requireRoles("analyst", "admin"),
-  param("id").isInt({ min: 1 }).withMessage("Invalid record ID"),
+  param("id").isMongoId().withMessage("Invalid record ID"),
   validate,
   RecordController.getOne
 );
@@ -48,7 +48,7 @@ router.patch(
   "/:id",
   requireRoles("admin"),
   [
-    param("id").isInt({ min: 1 }).withMessage("Invalid record ID"),
+    param("id").isMongoId().withMessage("Invalid record ID"),
     body("amount").optional().isFloat({ gt: 0 }).withMessage("Amount must be a positive number"),
     body("type").optional().isIn(["income", "expense"]).withMessage("Type must be income or expense"),
     body("category").optional().trim().notEmpty().withMessage("Category cannot be empty"),
@@ -62,7 +62,7 @@ router.patch(
 router.delete(
   "/:id",
   requireRoles("admin"),
-  param("id").isInt({ min: 1 }).withMessage("Invalid record ID"),
+  param("id").isMongoId().withMessage("Invalid record ID"),
   validate,
   RecordController.delete
 );

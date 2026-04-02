@@ -1,14 +1,14 @@
 {
   "name": "finance-dashboard-platform",
   "version": "1.0.0",
-  "description": "Unified finance dashboard API: RBAC, analytics, PostgreSQL/SQLite via Knex, Swagger, rate limits",
+  "description": "Finance dashboard API: MongoDB, Mongoose, RBAC, analytics, Swagger, rate limits",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "migrate": "knex migrate:latest",
-    "migrate:rollback": "knex migrate:rollback",
-    "seed": "knex seed:run"
+    "dev:memory": "nodemon src/scripts/devWithMemoryMongo.js",
+    "seed": "node src/scripts/seedAdmin.js",
+    "test": "node src/scripts/runApiTests.js"
   },
   "engines": {
     "node": ">=18"
@@ -23,13 +23,12 @@
     "express-validator": "^7.2.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "knex": "^3.1.0",
+    "mongoose": "^8.8.4",
     "morgan": "^1.10.0",
-    "pg": "^8.13.1",
-    "sqlite3": "^5.1.7",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^10.4.3",
     "nodemon": "^3.1.7"
   }
 }

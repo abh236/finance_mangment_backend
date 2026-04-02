@@ -1,98 +1,135 @@
-const { db, isPostgres } = require("../config/database");
+const { FinancialRecord } = require("../models/FinancialRecord");
+
+const matchActive = { deletedAt: null };
 
 const DashboardService = {
   async getSummary() {
-    const rows = await db("financial_records")
-      .whereNull("deleted_at")
-      .select(
-        db.raw("SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income"),
-        db.raw("SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expenses"),
-        db.raw("SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END) as net_balance"),
-        db.raw("COUNT(*) as total_records")
-      );
-    const row = rows[0];
+    const [row] = await FinancialRecord.aggregate([
+      { $match: matchActive },
+      {
+        $group: {
+          _id: null,
+          total_income: {
+            $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
+          },
+          total_expenses: {
+            $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] },
+          },
+          net_balance: {
+            $sum: {
+              $cond: [{ $eq: ["$type", "income"] }, "$amount", { $multiply: ["$amount", -1] }],
+            },
+          },
+          total_records: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const r = row || {};
     return {
-      total_income: Number(row.total_income || 0),
-      total_expenses: Number(row.total_expenses || 0),
-      net_balance: Number(row.net_balance || 0),
-      total_records: Number(row.total_records || 0),
+      total_income: Number(r.total_income || 0),
+      total_expenses: Number(r.total_expenses || 0),
+      net_balance: Number(r.net_balance || 0),
+      total_records: Number(r.total_records || 0),
     };
   },
 
-  getCategoryTotals() {
-    return db("financial_records")
-      .whereNull("deleted_at")
-      .select("category", "type")
-      .sum("amount as total")
-      .count("* as count")
-      .groupBy("category", "type")
-      .orderBy("total", "desc");
+  async getCategoryTotals() {
+    return FinancialRecord.aggregate([
+      { $match: matchActive },
+      {
+        $group: {
+          _id: { category: "$category", type: "$type" },
+          total: { $sum: "$amount" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { total: -1 } },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id.category",
+          type: "$_id.type",
+          total: 1,
+          count: 1,
+        },
+      },
+    ]);
   },
 
   async getMonthlyTrends({ months = 6 } = {}) {
     const m = Math.min(Math.max(Number(months) || 6, 1), 24);
-    if (isPostgres()) {
-      return db("financial_records")
-        .whereNull("deleted_at")
-        .whereRaw("date::timestamp >= NOW() - (? * interval '1 month')", [m])
-        .select(
-          db.raw("to_char(date::timestamp, 'YYYY-MM') as month"),
-          db.raw("SUM(CASE WHEN type = 'income' THEN amount::numeric ELSE 0 END) as income"),
-          db.raw("SUM(CASE WHEN type = 'expense' THEN amount::numeric ELSE 0 END) as expenses"),
-          db.raw(
-            "SUM(CASE WHEN type = 'income' THEN amount::numeric ELSE -amount::numeric END) as net"
-          )
-        )
-        .groupByRaw("to_char(date::timestamp, 'YYYY-MM')")
-        .orderBy("month", "asc");
-    }
+    const since = new Date();
+    since.setMonth(since.getMonth() - m);
 
-    return db("financial_records")
-      .whereNull("deleted_at")
-      .whereRaw(`date >= date('now', '-' || ? || ' months')`, [m])
-      .select(
-        db.raw("strftime('%Y-%m', date) as month"),
-        db.raw("SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income"),
-        db.raw("SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expenses"),
-        db.raw("SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END) as net")
-      )
-      .groupByRaw("strftime('%Y-%m', date)")
-      .orderBy("month", "asc");
+    return FinancialRecord.aggregate([
+      { $match: { ...matchActive, date: { $gte: since } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$date" } },
+          income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+          expenses: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          month: "$_id",
+          income: 1,
+          expenses: 1,
+          net: { $subtract: ["$income", "$expenses"] },
+        },
+      },
+    ]);
   },
 
   async getWeeklyTrends() {
-    if (isPostgres()) {
-      return db("financial_records")
-        .whereNull("deleted_at")
-        .whereRaw("date::timestamp >= NOW() - interval '8 weeks'")
-        .select(
-          db.raw("date_trunc('week', date::timestamp)::date as week"),
-          db.raw("SUM(CASE WHEN type = 'income' THEN amount::numeric ELSE 0 END) as income"),
-          db.raw("SUM(CASE WHEN type = 'expense' THEN amount::numeric ELSE 0 END) as expenses")
-        )
-        .groupByRaw("date_trunc('week', date::timestamp)")
-        .orderBy("week", "asc");
-    }
+    const since = new Date();
+    since.setDate(since.getDate() - 56);
 
-    return db("financial_records")
-      .whereNull("deleted_at")
-      .whereRaw("date >= date('now', '-8 weeks')")
-      .select(
-        db.raw("strftime('%Y-W%W', date) as week"),
-        db.raw("SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income"),
-        db.raw("SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expenses")
-      )
-      .groupByRaw("strftime('%Y-W%W', date)")
-      .orderBy("week", "asc");
+    return FinancialRecord.aggregate([
+      { $match: { ...matchActive, date: { $gte: since } } },
+      {
+        $group: {
+          _id: {
+            y: { $isoWeekYear: "$date" },
+            w: { $isoWeek: "$date" },
+          },
+          income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+          expenses: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          week: {
+            $concat: [{ $toString: "$_id.y" }, "-W", { $toString: "$_id.w" }],
+          },
+          income: 1,
+          expenses: 1,
+        },
+      },
+      { $sort: { week: 1 } },
+    ]);
   },
 
-  getRecentActivity({ limit = 10 } = {}) {
-    return db("financial_records as r")
-      .join("users as u", "r.created_by", "u.id")
-      .whereNull("r.deleted_at")
-      .select("r.id", "r.amount", "r.type", "r.category", "r.date", "r.notes", "u.name as created_by")
-      .orderBy("r.created_at", "desc")
-      .limit(limit);
+  async getRecentActivity({ limit = 10 } = {}) {
+    const docs = await FinancialRecord.find(matchActive)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate("createdBy", "name")
+      .lean();
+
+    return docs.map((r) => ({
+      id: String(r._id),
+      amount: r.amount,
+      type: r.type,
+      category: r.category,
+      date: r.date instanceof Date ? r.date.toISOString() : r.date,
+      notes: r.notes,
+      created_by: r.createdBy?.name || "Unknown",
+    }));
   },
 };
 

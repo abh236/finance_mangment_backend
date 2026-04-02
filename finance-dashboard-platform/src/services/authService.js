@@ -36,15 +36,16 @@ const AuthService = {
       throw err;
     }
 
+    const id = user._id.toString();
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      { id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     return {
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id, name: user.name, email: user.email, role: user.role },
     };
   },
 };

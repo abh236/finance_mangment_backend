@@ -1,5 +1,5 @@
 /**
- * API documentation (OpenAPI 3) — pattern inspired by Zorvyn-backend-task-main Swagger setup.
+ * OpenAPI 3 specification for Swagger UI.
  * Base URL includes /api prefix (see servers).
  */
 module.exports = {
@@ -8,7 +8,7 @@ module.exports = {
     title: "Finance Dashboard Platform API",
     version: "1.0.0",
     description:
-      "Role-based finance dashboard backend (merged from `backend/finance-dashboard` + patterns from `Zorvyn-backend-task-main`).",
+      "Role-based finance dashboard API with JWT auth, financial records, dashboard analytics, and RBAC. Data is stored in MongoDB (Mongoose). Resource IDs are MongoDB ObjectIds.",
   },
   servers: [{ url: "http://localhost:4000/api", description: "Local" }],
   components: {

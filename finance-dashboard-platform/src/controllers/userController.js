@@ -26,7 +26,7 @@ const UserController = {
       const user = await UserModel.findById(req.params.id);
       if (!user) return res.status(404).json({ success: false, error: "User not found" });
 
-      if (req.user.id === Number(req.params.id) && req.body.status === "inactive") {
+      if (req.user.id === req.params.id && req.body.status === "inactive") {
         return res.status(400).json({ success: false, error: "Cannot deactivate your own account" });
       }
 

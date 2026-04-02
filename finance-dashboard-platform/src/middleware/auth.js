@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { db } = require("../config/database");
+const { User } = require("../models/User");
 
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -10,17 +10,20 @@ async function authenticate(req, res, next) {
   const token = authHeader.split(" ")[1];
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await db("users")
-      .select("id", "name", "email", "role", "status")
-      .where({ id: payload.id })
-      .first();
+    const user = await User.findById(payload.id).select("name email role status").lean();
 
     if (!user) return res.status(401).json({ success: false, error: "User not found" });
     if (user.status === "inactive") {
       return res.status(403).json({ success: false, error: "Account is inactive" });
     }
 
-    req.user = user;
+    req.user = {
+      id: String(user._id),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    };
     return next();
   } catch {
     return res.status(401).json({ success: false, error: "Invalid or expired token" });
