@@ -23,3 +23,5 @@ finance-dashboard-platform/data/*.db
 npm-debug.log*
 *.log
 dist/
+.vercel
+.env*.local

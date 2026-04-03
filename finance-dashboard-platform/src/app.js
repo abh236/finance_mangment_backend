@@ -44,7 +44,13 @@ app.get("/", (_req, res) =>
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "finance-dashboard-platform" }));
 
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi, {
+  customCssUrl: "https://unpkg.com/swagger-ui-dist@5/swagger-ui.css",
+  customJs: [
+    "https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
+    "https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js",
+  ],
+}));
 
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
