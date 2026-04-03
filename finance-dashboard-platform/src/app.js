@@ -12,6 +12,7 @@ const { notFound, errorHandler } = require("./middleware/errorHandler");
 const { connectMongo, isConnected } = require("./config/database");
 
 const app = express();
+app.set("trust proxy", 1);
 
 // Lazy DB connection — works for both long-running server and Vercel serverless
 app.use(async (_req, _res, next) => {
@@ -24,7 +25,6 @@ app.use(async (_req, _res, next) => {
   }
   return next();
 });
-app.set("trust proxy", 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
