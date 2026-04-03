@@ -9,8 +9,21 @@ const swaggerUi = require("swagger-ui-express");
 const openapi = require("./docs/openapi.spec");
 const { apiLimiter } = require("./middleware/rateLimiters");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
+const { connectMongo, isConnected } = require("./config/database");
 
 const app = express();
+
+// Lazy DB connection — works for both long-running server and Vercel serverless
+app.use(async (_req, _res, next) => {
+  if (!isConnected()) {
+    try {
+      await connectMongo();
+    } catch (err) {
+      return next(err);
+    }
+  }
+  return next();
+});
 app.set("trust proxy", 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
