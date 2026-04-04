@@ -9,7 +9,9 @@
     "start": "npm start --prefix finance-dashboard-platform",
     "install:all": "npm install --prefix finance-dashboard-platform",
     "seed": "npm run seed --prefix finance-dashboard-platform",
-    "test": "npm test --prefix finance-dashboard-platform"
+    "test": "npm run test --prefix finance-dashboard-platform",
+    "test:extended": "npm run test:extended --prefix finance-dashboard-platform",
+    "test:all": "npm run test:all --prefix finance-dashboard-platform"
   },
   "keywords": [],
   "author": "",

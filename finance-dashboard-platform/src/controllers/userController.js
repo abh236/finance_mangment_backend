@@ -1,11 +1,15 @@
 const UserModel = require("../models/userModel");
+const AuditService = require("../services/auditService");
+const { AUDIT_ACTIONS } = require("../constants");
+const { ok, fail } = require("../utils/responseFormatter");
+const { parsePagination } = require("../utils/paginate");
 
 const UserController = {
   async list(req, res, next) {
     try {
-      const { page = 1, limit = 20 } = req.query;
-      const result = await UserModel.list({ page: Number(page), limit: Number(limit) });
-      return res.json({ success: true, ...result });
+      const { page, limit } = parsePagination(req.query);
+      const result = await UserModel.list({ page, limit });
+      return ok(res, result);
     } catch (e) {
       return next(e);
     }
@@ -14,8 +18,8 @@ const UserController = {
   async getOne(req, res, next) {
     try {
       const user = await UserModel.findById(req.params.id);
-      if (!user) return res.status(404).json({ success: false, error: "User not found" });
-      return res.json({ success: true, user });
+      if (!user) return fail(res, 404, "User not found");
+      return ok(res, { user });
     } catch (e) {
       return next(e);
     }
@@ -24,14 +28,30 @@ const UserController = {
   async update(req, res, next) {
     try {
       const user = await UserModel.findById(req.params.id);
-      if (!user) return res.status(404).json({ success: false, error: "User not found" });
+      if (!user) return fail(res, 404, "User not found");
 
       if (req.user.id === req.params.id && req.body.status === "inactive") {
-        return res.status(400).json({ success: false, error: "Cannot deactivate your own account" });
+        return fail(res, 400, "Cannot deactivate your own account");
       }
 
       const updated = await UserModel.update(req.params.id, req.body);
-      return res.json({ success: true, message: "User updated", user: updated });
+
+      const action =
+        req.body.status === "inactive"
+          ? AUDIT_ACTIONS.USER_DEACTIVATED
+          : AUDIT_ACTIONS.USER_UPDATED;
+
+      await AuditService.log({
+        action,
+        performedBy: req.user.id,
+        targetType: "User",
+        targetId: req.params.id,
+        metadata: { changes: req.body },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      return ok(res, { message: "User updated", user: updated });
     } catch (e) {
       return next(e);
     }

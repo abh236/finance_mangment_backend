@@ -56,6 +56,9 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/records", require("./routes/records"));
 app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/categories", require("./routes/categories"));
+app.use("/api/reports", require("./routes/reports"));
+app.use("/api/audit", require("./routes/audit"));
 
 app.use(notFound);
 app.use(errorHandler);
